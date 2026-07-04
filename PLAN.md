@@ -37,9 +37,10 @@ cross-cluster via Skupper. Os requisitos consolidados são:
   `sudo iptables`, nada de regra de firewall manual no host. Só operações
   padrão do Docker/kind (criar rede docker, publicar porta) e do
   Kubernetes (Service, NetworkPolicy dentro do cluster).
-- Execução via **`Makefile`** (`make up`, `make test-tls`, `make
-  test-unidirectional`, `make metrics`, `make test-network-drop`, `make
-  test-revocation`, `make down`), não comandos soltos digitados à mão.
+- Execução via **`Makefile`** (`make up`, `make validate`, `make test-tls`,
+  `make test-unidirectional`, `make metrics`, `make test-network-drop`,
+  `make test-revocation`, `make relink`, `make down`), não comandos soltos
+  digitados à mão.
 
 Ao investigar o ambiente (diretório `/arquivos/git/outros/poc-skupper` vazio,
 ainda não é repositório git), descobrimos que:
@@ -158,7 +159,7 @@ poc-skupper/
 ├── PLAN.md                            # este arquivo
 ├── README.md                          # narrativa completa, diagrama, ordem de execução, cleanup
 ├── .gitignore                         # tokens, .tmp/, metrics/results-*.csv
-├── Makefile                           # up / down / test-tls / test-unidirectional / metrics / test-network-drop / test-revocation
+├── Makefile                           # up / validate / test-tls / test-unidirectional / metrics / test-network-drop / test-revocation / relink / down
 ├── kind/
 │   ├── skupper-a.kind.yaml            # 1 control-plane, disableDefaultCNI: true, podSubnet 192.168.0.0/16, extraPortMappings (hostPort fixo)
 │   └── skupper-b.kind.yaml            # 1 control-plane, kindnet padrão
@@ -217,14 +218,15 @@ poc-skupper/
 9. **`09-validate-e2e.sh`** — dois curls:
    - de B: `curl http://svc-a:8080/` → espera `hello from A`
    - de A: `curl http://svc-b:8080/` → espera `hello from B`
-   Prova o requisito "cada cluster expõe um serviço acessado pelo outro" com uma ligação estabelecida só num sentido.
+   Prova o requisito "cada cluster expõe um serviço acessado pelo outro" com uma ligação estabelecida só num sentido. Cada verificação imprime `PASS:`/`FAIL:` e o script sai com código != 0 se qualquer uma falhar (é o que faz `make`/CI conseguirem detectar regressão, não só um humano lendo o log).
 
 10. **`10-validate-tls.sh`** — prova que a conexão é autenticada/criptografada:
     - `kubectl --context kind-skupper-a -n skupper get secret` mostra o Secret de TLS gerado pelo `token issue` (emitido pela CA interna do site).
     - `openssl s_client -connect <gateway-net-skupper-b>:30671 -brief` a partir de um pod em `net-skupper-b`, confirmando handshake TLS e mostrando o certificado apresentado.
     - Controle negativo: repetir sem o certificado de cliente emitido pelo token e confirmar que a autenticação mútua rejeita a conexão.
+    - Mesmo padrão `PASS:`/`FAIL:` + exit code do passo anterior.
 
-11. **`11-validate-unidirectional.sh`** — (defesa em profundidade, além do isolamento de rede) aplica `networkpolicy/skupper-a-deny-egress.yaml` no namespace `skupper` de A; repete os dois curls do passo 9 (devem continuar OK); roda um curl de dentro do router de A para um IP público (ex. `1.1.1.1`) como controle negativo — deve falhar, provando que a policy é real (Calico, não kindnet). O link continua ativo depois deste passo.
+11. **`11-validate-unidirectional.sh`** — (defesa em profundidade, além do isolamento de rede) aplica `networkpolicy/skupper-a-deny-egress.yaml` no namespace `skupper` de A; repete os dois curls do passo 9 (devem continuar OK); roda um curl de dentro do router de A para um IP público (ex. `1.1.1.1`) como controle negativo — deve falhar, provando que a policy é real (Calico, não kindnet). O link continua ativo depois deste passo. Mesmo padrão `PASS:`/`FAIL:` + exit code.
 
 12. **`12-collect-metrics.sh`** — precisa do link ainda ativo, por isso roda **antes** dos testes destrutivos/disruptivos: `metrics-server` (com `--kubelet-insecure-tls`); loop de requisições medindo `curl -w '%{time_total}'` cross-cluster vs. uma instância local de echo dentro do mesmo cluster, p50/p99; `kubectl top pod` do `skupper-router` nos dois clusters; tudo em `metrics/results-<timestamp>.csv`.
 
@@ -233,6 +235,30 @@ poc-skupper/
 14. **`14-test-link-revocation.sh`** — **último teste, é destrutivo**: `skupper link delete <nome>` (nome via `link status -o yaml`), confirma que os dois Services (`svc-a` em B e `svc-b` em A) perdem endpoints e ambos os curls passam a falhar. Roda por último de propósito — nada depois dele (além do teardown) precisa do link.
 
 15. **`99-teardown.sh`** — `helm uninstall` nos dois clusters, `kind delete cluster` nos dois, `docker network rm net-skupper-a net-skupper-b`.
+
+## Validação — targets do `Makefile`
+
+Sim, tem validação explícita, com comando `make` para cada uma. Não é só
+"rodar e olhar o log" — cada script de validação imprime `PASS:`/`FAIL:` por
+verificação e termina com exit code != 0 se algo falhar, então `make`
+também falha visivelmente (útil para rodar em CI depois, se quiser).
+
+| Comando | Roda | O que prova |
+|---|---|---|
+| `make up` | scripts `00`→`09` | Clusters no ar, link Skupper `connected`, e o requisito central: **cada cluster expõe um serviço que o outro consegue chamar** (curl nos dois sentidos) |
+| `make validate` | `09` + `10` + `11` de novo, sem recriar nada | Revalidação rápida e não-destrutiva: e2e bidirecional, mTLS, e unidirecionalidade (NetworkPolicy) — para rodar quantas vezes quiser depois do `make up` |
+| `make test-tls` | só `10` | Conexão é segura: mTLS de verdade (rejeita conexão sem certificado de cliente) |
+| `make test-unidirectional` | só `11` | Unidirecionalidade em profundidade: mesmo com egress bloqueado por NetworkPolicy em A, o tráfego dos dois sentidos continua OK (conexão já estabelecida), e A não consegue iniciar conexão nova para fora |
+| `make metrics` | só `12` | Gera `metrics/results-<timestamp>.csv` com latência p50/p99 e uso de CPU/mem do router |
+| `make test-network-drop` | só `13` | Reconexão automática depois de uma queda de rede simulada — não é destrutivo, termina com o link ativo de novo |
+| `make test-revocation` | só `14` | Revogação limpa do link — **destrutivo**, deixa o ambiente sem link no final |
+| `make relink` | reexecuta só `07` | Restabelece o link depois de um `make test-revocation`, sem recriar clusters/sites — útil para voltar a testar sem rodar `make up` do zero |
+| `make down` | `99` | Remove os 2 clusters e as 2 redes docker |
+
+`make up` sozinho já é a prova de ponta a ponta do requisito principal. Os
+demais targets são validações adicionais e independentes, na ordem em que
+fazem sentido rodar (a razão de `test-network-drop` vir antes de
+`test-revocation` está documentada nos Riscos abaixo).
 
 ## Riscos conhecidos (verificar durante a implementação)
 
@@ -271,7 +297,7 @@ poc-skupper/
 - [ ] `scripts/13-simulate-network-drop.sh` (docker network disconnect/connect)
 - [ ] `scripts/14-test-link-revocation.sh` (teste destrutivo, roda por último)
 - [ ] `scripts/99-teardown.sh`
-- [ ] `Makefile` (up / down / test-tls / test-unidirectional / metrics / test-network-drop / test-revocation)
+- [ ] `Makefile` (up / validate / test-tls / test-unidirectional / metrics / test-network-drop / test-revocation / relink / down)
 - [ ] `docs/v1-to-v2-mapping.md`
 - [ ] `README.md`
 
