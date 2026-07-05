@@ -274,39 +274,39 @@ fazem sentido rodar (a razão de `test-network-drop` vir antes de
 
 ### Scaffolding do repositório
 
-- [ ] Criar estrutura de diretórios (`kind/`, `networkpolicy/`, `workload/`, `scripts/`, `metrics/`, `docs/`)
-- [ ] `.gitignore` (tokens, `.tmp/`, `metrics/results-*.csv`)
-- [ ] `kind/skupper-a.kind.yaml` (Calico habilitado, podSubnet 192.168.0.0/16, extraPortMappings com hostPort fixo)
-- [ ] `kind/skupper-b.kind.yaml` (config padrão, kindnet)
-- [ ] `scripts/lib.sh`
-- [ ] `scripts/00-preflight.sh`
-- [ ] `scripts/01-create-networks.sh`
-- [ ] `scripts/02-create-clusters.sh` (com `KIND_EXPERIMENTAL_DOCKER_NETWORK` por cluster)
-- [ ] `scripts/03-install-calico.sh`
-- [ ] `scripts/04-install-skupper-controller.sh`
-- [ ] `scripts/05-create-sites.sh`
-- [ ] `scripts/06-pin-site-nodeport.sh`
-- [ ] `scripts/07-link-clusters.sh` (token issue + reescrita do endpoint + redeem)
-- [ ] `workload/echo-a.deployment.yaml`, `workload/echo-b.deployment.yaml`
-- [ ] `scripts/08-deploy-workloads.sh` (bidirecional: connector+listener nos dois clusters)
-- [ ] `scripts/09-validate-e2e.sh` (curl nos dois sentidos)
-- [ ] `scripts/10-validate-tls.sh`
-- [ ] `networkpolicy/skupper-a-deny-egress.yaml`
-- [ ] `scripts/11-validate-unidirectional.sh`
-- [ ] `scripts/12-collect-metrics.sh`
-- [ ] `scripts/13-simulate-network-drop.sh` (docker network disconnect/connect)
-- [ ] `scripts/14-test-link-revocation.sh` (teste destrutivo, roda por último)
-- [ ] `scripts/99-teardown.sh`
-- [ ] `Makefile` (up / validate / test-tls / test-unidirectional / metrics / test-network-drop / test-revocation / relink / down)
-- [ ] `docs/v1-to-v2-mapping.md`
-- [ ] `README.md`
+- [x] Criar estrutura de diretórios (`kind/`, `networkpolicy/`, `workload/`, `scripts/`, `metrics/`, `docs/`)
+- [x] `.gitignore` (tokens, `.tmp/`, `metrics/results-*.csv`)
+- [x] `kind/skupper-a.kind.yaml` (Calico habilitado, podSubnet 192.168.0.0/16, extraPortMappings com hostPort fixo)
+- [x] `kind/skupper-b.kind.yaml` (config padrão, kindnet)
+- [x] `scripts/lib.sh`
+- [x] `scripts/00-preflight.sh`
+- [x] `scripts/01-create-networks.sh`
+- [x] `scripts/02-create-clusters.sh` (com `KIND_EXPERIMENTAL_DOCKER_NETWORK` por cluster)
+- [x] `scripts/03-install-calico.sh`
+- [x] `scripts/04-install-skupper-controller.sh`
+- [x] `scripts/05-create-sites.sh`
+- [x] `scripts/06-pin-site-nodeport.sh`
+- [x] `scripts/07-link-clusters.sh` (token issue + reescrita do endpoint + redeem)
+- [x] `workload/echo-a.deployment.yaml`, `workload/echo-b.deployment.yaml`
+- [x] `scripts/08-deploy-workloads.sh` (bidirecional: connector+listener nos dois clusters)
+- [x] `scripts/09-validate-e2e.sh` (curl nos dois sentidos)
+- [x] `scripts/10-validate-tls.sh`
+- [x] `networkpolicy/skupper-a-deny-egress.yaml`
+- [x] `scripts/11-validate-unidirectional.sh`
+- [x] `scripts/12-collect-metrics.sh`
+- [x] `scripts/13-simulate-network-drop.sh` (docker network disconnect/connect)
+- [x] `scripts/14-test-link-revocation.sh` (teste destrutivo, roda por último)
+- [x] `scripts/99-teardown.sh`
+- [x] `Makefile` (up / validate / test-tls / test-unidirectional / metrics / test-network-drop / test-revocation / relink / down)
+- [x] `docs/v1-to-v2-mapping.md`
+- [x] `README.md`
 
 ### Execução da PoC
 
-- [ ] `make up` (scripts 00→09) — link "connected" + curl nos dois sentidos retornando o texto certo
-- [ ] `10-validate-tls.sh` — confirma mTLS (handshake + rejeição sem cert de cliente)
-- [ ] `11-validate-unidirectional.sh` — NetworkPolicy em profundidade + controle negativo
-- [ ] `12-collect-metrics.sh` — CSV gerado (link ainda ativo)
-- [ ] `13-simulate-network-drop.sh` — tempo de reconexão registrado (link ainda ativo depois)
-- [ ] `14-test-link-revocation.sh` — revogação limpa nos dois sentidos (por último, destrutivo)
-- [ ] `99-teardown.sh` — clusters e redes docker removidos
+- [x] `make up` (scripts 00→09) — link "connected" + curl nos dois sentidos retornando o texto certo
+- [x] `10-validate-tls.sh` — confirma mTLS (handshake + rejeição sem cert de cliente)
+- [x] `11-validate-unidirectional.sh` — NetworkPolicy em profundidade + controle negativo
+- [x] `12-collect-metrics.sh` — CSV gerado (link ainda ativo)
+- [x] `13-simulate-network-drop.sh` — tempo de reconexão registrado (link ainda ativo depois)
+- [x] `14-test-link-revocation.sh` — revogação limpa nos dois sentidos (por último, destrutivo)
+- [x] `99-teardown.sh` — clusters e redes docker removidos

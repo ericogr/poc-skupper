@@ -1,0 +1,34 @@
+# Defesa em profundidade (além do isolamento de rede docker): bloqueia
+# qualquer egress NOVO de pods no namespace 'app' do cluster A para fora do
+# cluster. DNS (kube-system) e tráfego intra-cluster (pod CIDR) continuam
+# liberados - sem isso nem o próprio curl de validação funcionaria.
+#
+# Conexões já estabelecidas (ex.: o link site-to-site, iniciado por B) não são
+# derrubadas por esta policy: NetworkPolicy/Calico avalia estabelecimento de
+# NOVAS conexões, o tráfego de retorno de uma conexão já existente continua
+# fluindo via conntrack.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: skupper-a-deny-egress
+  namespace: app
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Tráfego intra-cluster (outros pods do cluster A, incluindo o próprio
+    # namespace app e o namespace do controller)
+    - to:
+        - ipBlock:
+            cidr: 192.168.0.0/16

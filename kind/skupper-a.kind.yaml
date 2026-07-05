@@ -1,0 +1,21 @@
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: skupper-a
+networking:
+  disableDefaultCNI: true
+  podSubnet: "192.168.0.0/16"
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # hostPort fixo publicado no host - é a "porta pública" do site A,
+      # equivalente ao endpoint de link-access do Skupper (site expõe via
+      # NodePort mesmo com o Service LoadBalancer ficando <pending>).
+      - containerPort: 30671
+        hostPort: 30671
+        protocol: TCP
+      # segunda porta pública: o "grant server" (Service skupper-grant-server,
+      # namespace skupper) precisa ser alcançável por B durante o token
+      # redeem - é uma chamada de bootstrap separada do link inter-router.
+      - containerPort: 30672
+        hostPort: 30672
+        protocol: TCP
