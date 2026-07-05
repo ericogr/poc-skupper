@@ -1,161 +1,168 @@
-# PoC: conectar 2 clusters via Skupper
+# PoC: connecting 2 clusters via Skupper
 
-Link unidirecional entre dois clusters Kubernetes locais (kind), com acesso
-bidirecional a serviços de aplicação sobre esse único link. Ver `PLAN.md`
-para o roteiro completo de decisões e riscos considerados.
+*Languages: English (this file) · [Português (pt-BR)](README.pt-BR.md).*
 
-## Requisitos que a PoC prova
+A one-way link between two local Kubernetes clusters (kind), with
+two-way access to application services over that single link. See
+`PLAN.md` (in Portuguese) for the full roadmap of decisions and risks
+considered.
 
-1. **Dois clusters Kubernetes distintos**, provisionados localmente com `kind`.
-2. **Cada cluster expõe um Service consumido pelo outro** — acesso a serviço
-   é bidirecional (A chama serviço de B, B chama serviço de A).
-3. **Só um dos clusters fica exposto/alcançável pela rede** — a ligação é
-   unidirecional (B disca para A; A nunca disca para fora), mesmo que o
-   tráfego de aplicação depois flua nos dois sentidos sobre essa única
-   ligação.
-4. **Conexão segura** — mTLS, validado explicitamente (não é só assumido).
-5. **Simulação de "clusters conectados via internet"**, não apenas na mesma
-   rede local — **sem tocar na configuração de rede da máquina local** (nada
-   de `sudo`, nada de `iptables`/firewall manual no host).
+## Requirements this PoC proves
 
-## Arquitetura de rede
+1. **Two distinct Kubernetes clusters**, provisioned locally with `kind`.
+2. **Each cluster exposes a Service consumed by the other** — service
+   access is bidirectional (A calls B's service, B calls A's service).
+3. **Only one of the clusters is exposed/reachable over the network** —
+   the connection is unidirectional (B dials A; A never dials out), even
+   though application traffic then flows both ways over that single
+   connection.
+4. **Secure connection** — mTLS, explicitly validated (not just assumed).
+5. **Simulation of "clusters connected over the internet"**, not just on
+   the same local network — **without touching the local machine's
+   network configuration** (no `sudo`, no manual `iptables`/firewall rule
+   on the host).
 
-O diagrama abaixo mostra o caminho **completo e nomeado** de uma chamada em
-cada sentido — de qual `Service` cada lado chama até qual Pod responde,
-passando pela única porta publicada no host. As cores marcam os dois
-sentidos independentes: <span style="color:#2b7a78">**verde-azulado = B chamando `svc-a` (responde `echo-a`, em A)**</span>
-e <span style="color:#c0392b">**vermelho = A chamando `svc-b` (responde `echo-b`, em B)**</span>;
-as linhas pontilhadas na mesma cor são a resposta voltando.
+## Network architecture
+
+The diagram below shows the **full, named** path of a call in each
+direction — which `Service` each side calls, all the way to which Pod
+answers, through the single port published on the host. The colors mark
+the two independent directions: <span style="color:#2b7a78">**teal = B calling `svc-a` (answered by `echo-a`, in A)**</span>
+and <span style="color:#c0392b">**red = A calling `svc-b` (answered by `echo-b`, in B)**</span>;
+the dotted lines in the same color are the response coming back.
 
 ```mermaid
 flowchart TB
-    subgraph NETB["net-skupper-b (rede docker isolada)"]
+    subgraph NETB["net-skupper-b (isolated docker network)"]
         direction LR
-        listA["Service <b>svc-a</b><br/>(listener svc-a)<br/>chamado pelos pods de B"]
+        listA["Service <b>svc-a</b><br/>(listener svc-a)<br/>called by pods in B"]
         routerB(["skupper-router B"])
-        connB["connector <b>svc-b</b><br/>(porta 8080 → echo-b)"]
-        echoB[["Pod echo-b<br/>responde 'hello from B'"]]
+        connB["connector <b>svc-b</b><br/>(port 8080 → echo-b)"]
+        echoB[["Pod echo-b<br/>replies 'hello from B'"]]
         connB --> echoB
     end
 
-    subgraph HOST["Host local — porta publicada via extraPortMappings do kind"]
-        PORT1(("porta :30671<br/>link inter-router, mTLS<br/>único caminho entre as redes"))
+    subgraph HOST["Local host — port published via kind's extraPortMappings"]
+        PORT1(("port :30671<br/>inter-router link, mTLS<br/>only path between the networks"))
     end
 
-    subgraph NETA["net-skupper-a (rede docker isolada)"]
+    subgraph NETA["net-skupper-a (isolated docker network)"]
         direction LR
-        listB["Service <b>svc-b</b><br/>(listener svc-b)<br/>chamado pelos pods de A"]
+        listB["Service <b>svc-b</b><br/>(listener svc-b)<br/>called by pods in A"]
         routerA(["skupper-router A"])
-        connA["connector <b>svc-a</b><br/>(porta 8080 → echo-a)"]
-        echoA[["Pod echo-a<br/>responde 'hello from A'"]]
+        connA["connector <b>svc-a</b><br/>(port 8080 → echo-a)"]
+        echoA[["Pod echo-a<br/>replies 'hello from A'"]]
         connA --> echoA
     end
 
-    listA == "B→A ①: pod em B chama<br/>http://svc-a:8080" ==> routerB
-    routerB == "B→A ②: envia pelo link mTLS<br/>(iniciado por B)" ==> PORT1
-    PORT1 == "B→A ③: encaminha para A" ==> routerA
-    routerA == "B→A ④: roteia pro connector svc-a" ==> connA
-    connA -.->|"B→A ⑤: resposta 'hello from A'"| listA
+    listA == "B→A ①: pod in B calls<br/>http://svc-a:8080" ==> routerB
+    routerB == "B→A ②: sends over the mTLS link<br/>(initiated by B)" ==> PORT1
+    PORT1 == "B→A ③: forwards to A" ==> routerA
+    routerA == "B→A ④: routes to connector svc-a" ==> connA
+    connA -.->|"B→A ⑤: response 'hello from A'"| listA
 
-    listB == "A→B ①: pod em A chama<br/>http://svc-b:8080" ==> routerA
-    routerA == "A→B ②: envia pelo MESMO link" ==> PORT1
-    PORT1 == "A→B ③: encaminha para B" ==> routerB
-    routerB == "A→B ④: roteia pro connector svc-b" ==> connB
-    connB -.->|"A→B ⑤: resposta 'hello from B'"| listB
+    listB == "A→B ①: pod in A calls<br/>http://svc-b:8080" ==> routerA
+    routerA == "A→B ②: sends over the SAME link" ==> PORT1
+    PORT1 == "A→B ③: forwards to B" ==> routerB
+    routerB == "A→B ④: routes to connector svc-b" ==> connB
+    connB -.->|"A→B ⑤: response 'hello from B'"| listB
 
-    NETA -.-|"sem rota direta —<br/>isolamento padrão do Docker"| NETB
+    NETA -.-|"no direct route —<br/>Docker's default isolation"| NETB
 
     linkStyle 2,3,4,5,6 stroke:#2b7a78,stroke-width:2.5px
     linkStyle 7,8,9,10,11 stroke:#c0392b,stroke-width:2.5px
     linkStyle 12 stroke:#888888,stroke-width:1px,stroke-dasharray:4 3
 ```
 
-Note o essencial: **um único link TCP/TLS** (a linha cinza pontilhada mostra
-que não existe nenhuma outra rota entre `net-skupper-a` e `net-skupper-b` —
-a única forma de atravessar é pela porta `:30671` publicada no host) é
-usado nos **dois sentidos**. Ele é iniciado por B (`skupper token redeem`,
-ver `PLAN.md`), mas depois de estabelecido carrega tanto o tráfego
-"B → svc-a → echo-a" quanto "A → svc-b → echo-b" — daí ligação
-**unidirecional** (só B disca) com acesso a serviço **bidirecional**. Os
-nomes `svc-a`/`svc-b` são as *routing keys* do Skupper: cada lado roda um
-`connector` (junto do Pod real) e um `listener` (que cria o `Service` local
-consumido pelos próprios pods do cluster) para a routing key do outro lado.
+Note the essential part: **a single TCP/TLS link** (the dotted gray line
+shows that there is no other route between `net-skupper-a` and
+`net-skupper-b` — the only way across is through the `:30671` port
+published on the host) is used in **both directions**. It's initiated by
+B (`skupper token redeem`, see `PLAN.md`), but once established it
+carries both "B → svc-a → echo-a" traffic and "A → svc-b → echo-b"
+traffic — hence a **unidirectional** connection (only B dials) with
+**bidirectional** service access. The names `svc-a`/`svc-b` are Skupper
+*routing keys*: each side runs a `connector` (next to the real Pod) and a
+`listener` (which creates the local `Service` consumed by the cluster's
+own pods) for the other side's routing key.
 
-Cada cluster kind roda na sua própria rede docker isolada
-(`net-skupper-a`, `net-skupper-b`) em vez de compartilhar a rede `kind`
-default — isso evita que os dois clusters se enxerguem como se estivessem na
-mesma LAN. O único caminho de A para B (na verdade, de B para A) é a porta
-publicada no host via `extraPortMappings` do kind, o mesmo mecanismo que já
-publica a porta da API do Kubernetes — nenhuma regra de firewall extra. (Há
-também uma segunda porta publicada, `:30672`, usada só no bootstrap do
-`token issue`/`redeem` — omitida aqui para não distrair do fluxo de
-tráfego; ver `docs/ARCHITECTURE.md`.)
+Each kind cluster runs on its own isolated docker network
+(`net-skupper-a`, `net-skupper-b`) instead of sharing the default `kind`
+network — this keeps the two clusters from seeing each other as if they
+were on the same LAN. The only path from A to B (really, from B to A) is
+the port published on the host via kind's `extraPortMappings`, the same
+mechanism that already publishes the Kubernetes API port — no extra
+firewall rule. (There's also a second published port, `:30672`, used only
+for `token issue`/`redeem` bootstrap — omitted here so it doesn't
+distract from the traffic flow; see `docs/ARCHITECTURE.md`.)
 
-Este é só o diagrama de topologia com o fluxo de tráfego. Para a
-arquitetura completa — componentes por namespace, sequência de bootstrap
-do link (grant/token/redeem), a mesma troca de tráfego em formato de
-sequência, cadeia de mTLS, defesa em profundidade da unidirecionalidade
-(NetworkPolicy/Calico) e os cenários de falha simulados — ver
-**[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)**, com um diagrama
-Mermaid para cada um desses tópicos.
+This is just the topology diagram with the traffic flow. For the full
+architecture — components per namespace, the link's bootstrap sequence
+(grant/token/redeem), the same traffic exchange as a sequence diagram,
+the mTLS chain, defense-in-depth for the unidirectionality
+(NetworkPolicy/Calico), and the simulated failure scenarios — see
+**[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** (or the Portuguese
+version, [`docs/ARCHITECTURE.pt-BR.md`](docs/ARCHITECTURE.pt-BR.md)),
+with a Mermaid diagram for each of those topics.
 
-Detalhes completos das decisões (por que Calico só em A, por que
-`extraPortMappings` em vez de MetalLB, o que o token precisa ter reescrito
-antes do `redeem`, etc.) estão em `PLAN.md`.
+Full details on the decisions (why Calico only on A, why
+`extraPortMappings` instead of MetalLB, what field in the token needs
+rewriting before `redeem`, etc.) are in `PLAN.md` (in Portuguese).
 
-## Pré-requisitos
+## Prerequisites
 
-- `docker`, `kind` (>= 0.31), `kubectl`, `helm`, `skupper` CLI (v2.1.1) e
-  `jq` no PATH.
-- Nenhum root/sudo necessário.
-- Não precisa conferir isso manualmente: `make preflight` (e todo alvo do
-  Makefile, automaticamente) já valida que essas ferramentas estão
-  instaladas antes de fazer qualquer outra coisa — ver seção seguinte.
+- `docker`, `kind` (>= 0.31), `kubectl`, `helm`, `skupper` CLI (v2.1.1),
+  and `jq` on the PATH.
+- No root/sudo required.
+- No need to check this by hand: `make preflight` (and every Makefile
+  target, automatically) already validates that these tools are
+  installed before doing anything else — see the next section.
 
-## Ordem de execução
+## Execution order
 
 ```sh
-make preflight              # só confere as ferramentas de host (docker, kind,
-                             # kubectl, helm, skupper, jq) - roda sozinho ou
-                             # automaticamente antes de qualquer outro alvo
-make up                    # scripts 00->09: clusters no ar, link connected,
-                            # curl bidirecional passando
-make validate               # revalidação não-destrutiva (e2e + tls + unidirectional)
-make test-tls                # só a validação de mTLS
-make test-unidirectional      # só a validação de NetworkPolicy/unidirecionalidade
-make metrics                  # gera metrics/results-<timestamp>.csv (link ainda ativo)
-make test-network-drop         # reconexão automática após queda de rede simulada
-make test-revocation             # DESTRUTIVO: revoga o link, termina a PoC funcional
-make relink                        # reestabelece o link após test-revocation, sem recriar nada
-make down                            # remove os 2 clusters e as 2 redes docker
+make preflight              # only checks host tools (docker, kind,
+                             # kubectl, helm, skupper, jq) - runs standalone
+                             # or automatically before any other target
+make up                    # scripts 00->09: clusters up, link connected,
+                            # bidirectional curl passing
+make validate               # non-destructive revalidation (e2e + tls + unidirectional)
+make test-tls                # only the mTLS validation
+make test-unidirectional      # only the NetworkPolicy/unidirectionality validation
+make metrics                  # generates metrics/results-<timestamp>.csv (link still up)
+make test-network-drop         # automatic reconnection after a simulated network drop
+make test-revocation             # DESTRUCTIVE: revokes the link, ends the working PoC
+make relink                        # re-establishes the link after test-revocation, no recreation
+make down                            # removes both clusters and both docker networks
 ```
 
-`make up` sozinho já prova o requisito central. Os demais targets são
-validações adicionais e independentes. `test-network-drop` roda antes de
-`test-revocation` de propósito: o primeiro termina com o link ativo de novo,
-o segundo é destrutivo.
+`make up` alone already proves the central requirement. The other
+targets are additional, independent validations. `test-network-drop`
+runs before `test-revocation` on purpose: the first ends with the link
+active again, the second is destructive.
 
-Todo alvo do Makefile depende de `preflight` (`scripts/check-tools.sh`):
-antes de tocar em qualquer cluster/rede, ele confere se `docker`, `kind`,
-`kubectl`, `helm`, `skupper` e `jq` estão no PATH. Se faltar alguma, o
-Makefile para imediatamente e imprime **todas** as ferramentas ausentes de
-uma vez (não só a primeira), cada uma com um link/comando de instalação
-sugerido — não é preciso rodar `make` repetidas vezes só para descobrir a
-próxima dependência faltando.
+Every Makefile target depends on `preflight`
+(`scripts/check-tools.sh`): before touching any cluster/network, it
+checks whether `docker`, `kind`, `kubectl`, `helm`, `skupper`, and `jq`
+are on the PATH. If any are missing, the Makefile stops immediately and
+prints **every** missing tool at once (not just the first one), each
+with a suggested install link/command — no need to run `make` repeatedly
+just to discover the next missing dependency.
 
 ## Cleanup
 
-`make down` remove os releases Helm, os 2 clusters kind e as 2 redes docker
-(`net-skupper-a`, `net-skupper-b`). Idempotente — pode ser rodado mesmo se um
-passo anterior falhou no meio do caminho.
+`make down` removes the Helm releases, both kind clusters, and both
+docker networks (`net-skupper-a`, `net-skupper-b`). Idempotent — safe to
+run even if a previous step failed partway through.
 
-## Estrutura
+## Repository layout
 
 ```
-kind/            configs dos clusters (podSubnet, extraPortMappings, CNI)
-networkpolicy/   NetworkPolicy de egress-deny (defesa em profundidade em A)
-workload/        Deployments dos serviços de eco (echo-a, echo-b)
-scripts/         um script por passo, numerado na ordem de execução
-metrics/         CSVs gerados por make metrics
-docs/            ARCHITECTURE.md (diagramas Mermaid) + mapeamento Skupper v1 -> v2
+kind/            cluster configs (podSubnet, extraPortMappings, CNI)
+networkpolicy/   egress-deny NetworkPolicy (defense in depth in A)
+workload/        echo service Deployments (echo-a, echo-b)
+scripts/         one script per step, numbered in execution order
+metrics/         CSVs generated by make metrics
+docs/            ARCHITECTURE.md / ARCHITECTURE.pt-BR.md (Mermaid diagrams)
+                 + Skupper v1 -> v2 mapping
 ```
