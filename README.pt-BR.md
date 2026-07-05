@@ -108,7 +108,7 @@ antes do `redeem`, etc.) estão em `PLAN.md`.
 
 ## Pré-requisitos
 
-- `docker`, `kind` (>= 0.31), `kubectl`, `helm`, `skupper` CLI (v2.1.1) e
+- `docker`, `kind` (>= 0.31), `kubectl`, `helm`, `skupper` CLI (v2.2.1) e
   `jq` no PATH.
 - Nenhum root/sudo necessário.
 - Não precisa conferir isso manualmente: `make preflight` (e todo alvo do

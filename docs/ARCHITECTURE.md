@@ -95,7 +95,7 @@ Key points:
 flowchart LR
     subgraph clusterA["cluster skupper-a — CNI: Calico"]
         subgraph nsSkupperA["namespace: skupper"]
-            ctrlA["deployment/skupper-controller<br/>(helm chart 2.1.1)"]
+            ctrlA["deployment/skupper-controller<br/>(helm chart 2.2.1)"]
             grantA["Service skupper-grant-server<br/>nodePort 30672 (fixed)"]
         end
         subgraph nsAppA["namespace: app"]
@@ -110,7 +110,7 @@ flowchart LR
 
     subgraph clusterB["cluster skupper-b — CNI: kindnet (default)"]
         subgraph nsSkupperB["namespace: skupper"]
-            ctrlB["deployment/skupper-controller<br/>(helm chart 2.1.1)"]
+            ctrlB["deployment/skupper-controller<br/>(helm chart 2.2.1)"]
         end
         subgraph nsAppB["namespace: app"]
             siteB["site-b<br/>(no exposure)"]

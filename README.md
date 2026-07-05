@@ -111,7 +111,7 @@ rewriting before `redeem`, etc.) are in `PLAN.md` (in Portuguese).
 
 ## Prerequisites
 
-- `docker`, `kind` (>= 0.31), `kubectl`, `helm`, `skupper` CLI (v2.1.1),
+- `docker`, `kind` (>= 0.31), `kubectl`, `helm`, `skupper` CLI (v2.2.1),
   and `jq` on the PATH.
 - No root/sudo required.
 - No need to check this by hand: `make preflight` (and every Makefile

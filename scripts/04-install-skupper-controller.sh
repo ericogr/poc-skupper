@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Instala o controller do Skupper (v2.1.1, fixada) nos dois clusters via Helm.
+# Instala o controller do Skupper (v2.2.1, fixada) nos dois clusters via Helm.
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-SKUPPER_VERSION="2.1.1"
+SKUPPER_VERSION="2.2.1"
 
 for ctx in "${CTX_A}" "${CTX_B}"; do
   helm upgrade --install skupper oci://quay.io/skupper/helm/skupper \
