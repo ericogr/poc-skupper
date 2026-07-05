@@ -1,15 +1,9 @@
 #!/usr/bin/env bash
-# Confere ferramentas, versões e ausência de colisão de nomes antes de criar nada.
+# Confere ferramentas (delega a scripts/check-tools.sh) e ausência de
+# colisão de nomes antes de criar nada.
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-for bin in docker kind skupper helm kubectl; do
-  command -v "${bin}" >/dev/null 2>&1 || die "binário obrigatório não encontrado: ${bin}"
-done
-
-log "docker:  $(docker --version)"
-log "kind:    $(kind --version)"
-log "skupper: $(skupper version 2>&1 | tr '\n' ' ')"
-log "helm:    $(helm version --short 2>&1 || helm version)"
+"$(dirname "${BASH_SOURCE[0]}")/check-tools.sh"
 
 for c in "${CLUSTER_A}" "${CLUSTER_B}"; do
   if kind get clusters 2>/dev/null | grep -qx "${c}"; then

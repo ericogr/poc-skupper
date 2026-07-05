@@ -1,8 +1,16 @@
-.PHONY: up validate test-tls test-unidirectional metrics test-network-drop test-revocation relink down
+.PHONY: preflight up validate test-tls test-unidirectional metrics test-network-drop test-revocation relink down
 
 SCRIPTS := scripts
 
-up:
+# Confere se as ferramentas de host exigidas (docker, kind, kubectl, helm,
+# skupper, jq) estão instaladas. Reporta TODAS as que faltarem de uma vez,
+# cada uma com orientação de instalação. Todo alvo abaixo depende deste,
+# então nenhum comando dependente de ferramenta roda sem essa checagem
+# passar antes.
+preflight:
+	@$(SCRIPTS)/check-tools.sh
+
+up: preflight
 	@$(SCRIPTS)/00-preflight.sh
 	@$(SCRIPTS)/01-create-networks.sh
 	@$(SCRIPTS)/02-create-clusters.sh
@@ -14,28 +22,28 @@ up:
 	@$(SCRIPTS)/08-deploy-workloads.sh
 	@$(SCRIPTS)/09-validate-e2e.sh
 
-validate:
+validate: preflight
 	@$(SCRIPTS)/09-validate-e2e.sh
 	@$(SCRIPTS)/10-validate-tls.sh
 	@$(SCRIPTS)/11-validate-unidirectional.sh
 
-test-tls:
+test-tls: preflight
 	@$(SCRIPTS)/10-validate-tls.sh
 
-test-unidirectional:
+test-unidirectional: preflight
 	@$(SCRIPTS)/11-validate-unidirectional.sh
 
-metrics:
+metrics: preflight
 	@$(SCRIPTS)/12-collect-metrics.sh
 
-test-network-drop:
+test-network-drop: preflight
 	@$(SCRIPTS)/13-simulate-network-drop.sh
 
-test-revocation:
+test-revocation: preflight
 	@$(SCRIPTS)/14-test-link-revocation.sh
 
-relink:
+relink: preflight
 	@$(SCRIPTS)/07-link-clusters.sh
 
-down:
+down: preflight
 	@$(SCRIPTS)/99-teardown.sh
