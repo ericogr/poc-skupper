@@ -20,22 +20,27 @@ para o roteiro completo de decisões e riscos considerados.
 
 ## Arquitetura de rede
 
-```
- net-skupper-a (isolada)                    net-skupper-b (isolada)
- ┌───────────────────────────────┐          ┌───────────────────────────────┐
- │  cluster skupper-a             │          │  cluster skupper-b             │
- │  - Calico (NetworkPolicy real) │          │  - kindnet (padrão)             │
- │  - site-a --enable-link-access │          │  - site-b (sem exposição)      │
- │    Service LoadBalancer        │          │                                 │
- │    (pending, mas com NodePort  │          │  - connector svc-b (echo-b)    │
- │    fixo publicado no host)     │          │  - listener  svc-a             │
- │  - connector svc-a (echo-a)    │          │                                 │
- │  - listener  svc-b             │          │                                 │
- └───────────────┬────────────────┘          └────────────────┬───────────────┘
-                 │ extraPortMappings do kind                   │
-                 │ (hostPort fixo 30671)                       │
-                 │ publicado via docker -p (automático)        │
-                 └───────────────────► HOST ◄───────────────────┘
+```mermaid
+flowchart TB
+    subgraph HOST["Host local — Docker Engine (nenhuma config de rede alterada)"]
+        direction LR
+        PORT1["porta publicada :30671<br/>(link inter-router)"]
+        PORT2["porta publicada :30672<br/>(bootstrap do token)"]
+    end
+
+    subgraph NETA["net-skupper-a (isolada)"]
+        A["cluster skupper-a<br/>Calico (NetworkPolicy real)<br/>site-a --enable-link-access<br/>connector svc-a (echo-a) / listener svc-b"]
+    end
+
+    subgraph NETB["net-skupper-b (isolada)"]
+        B["cluster skupper-b<br/>kindnet (padrão)<br/>site-b (sem exposição)<br/>connector svc-b (echo-b) / listener svc-a"]
+    end
+
+    A -- "extraPortMappings do kind<br/>(docker -p, automático)" --> PORT1
+    A --> PORT2
+    PORT1 -- "alcançável via gateway<br/>de net-skupper-b" --> B
+    PORT2 --> B
+    NETA -.->|"sem rota direta —<br/>isolamento padrão do Docker"| NETB
 ```
 
 Cada cluster kind roda na sua própria rede docker isolada
@@ -44,6 +49,13 @@ default — isso evita que os dois clusters se enxerguem como se estivessem na
 mesma LAN. O único caminho de A para B (na verdade, de B para A) é a porta
 publicada no host via `extraPortMappings` do kind, o mesmo mecanismo que já
 publica a porta da API do Kubernetes — nenhuma regra de firewall extra.
+
+Este é só o diagrama de topologia. Para a arquitetura completa — componentes
+por namespace, sequência de bootstrap do link (grant/token/redeem), fluxo de
+tráfego bidirecional sobre o link único, cadeia de mTLS, defesa em
+profundidade da unidirecionalidade (NetworkPolicy/Calico) e os cenários de
+falha simulados — ver **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)**,
+com um diagrama Mermaid para cada um desses tópicos.
 
 Detalhes completos das decisões (por que Calico só em A, por que
 `extraPortMappings` em vez de MetalLB, o que o token precisa ter reescrito
@@ -89,5 +101,5 @@ networkpolicy/   NetworkPolicy de egress-deny (defesa em profundidade em A)
 workload/        Deployments dos serviços de eco (echo-a, echo-b)
 scripts/         um script por passo, numerado na ordem de execução
 metrics/         CSVs gerados por make metrics
-docs/            mapeamento Skupper v1 -> v2
+docs/            ARCHITECTURE.md (diagramas Mermaid) + mapeamento Skupper v1 -> v2
 ```
