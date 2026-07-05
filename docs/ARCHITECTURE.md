@@ -247,7 +247,9 @@ que a policy é real (Calico), não um NetworkPolicy inerte.
 
 ```mermaid
 flowchart LR
-    up["make up<br/>(scripts 00→09)"] --> validate["make validate<br/>(09 + 10 + 11)"]
+    preflight["make preflight<br/>(check-tools.sh:<br/>docker/kind/kubectl/<br/>helm/skupper/jq)"]
+    preflight -.->|"pré-requisito de<br/>TODO alvo abaixo"| up["make up<br/>(00-preflight + scripts 01→09)"]
+    up --> validate["make validate<br/>(09 + 10 + 11)"]
     validate --> metrics["make metrics<br/>(12, link ainda ativo)"]
     metrics --> drop["make test-network-drop<br/>(13 — não-destrutivo,<br/>termina com link Ready)"]
     drop --> revoke["make test-revocation<br/>(14 — DESTRUTIVO,<br/>termina com link removido)"]
@@ -258,6 +260,7 @@ flowchart LR
 
     style revoke fill:#4a1f1f,color:#fff
     style up fill:#1f3b57,color:#fff
+    style preflight fill:#2d2d2d,color:#fff
 ```
 
 `test-network-drop` roda antes de `test-revocation` de propósito: o
@@ -266,6 +269,17 @@ primeiro termina com o link ativo de novo (reconexão automática após
 destrutivo por definição (`skupper link delete`) e por isso roda por
 último. `make relink` existe justamente para religar os clusters depois de
 `test-revocation` sem precisar recriar nada do zero.
+
+Todo alvo do Makefile (`up`, `validate`, `test-tls`,
+`test-unidirectional`, `metrics`, `test-network-drop`, `test-revocation`,
+`relink`, `down`) declara `preflight` como pré-requisito — `make` roda
+`scripts/check-tools.sh` antes de qualquer outro comando. Esse script
+varre `docker`, `kind`, `kubectl`, `helm`, `skupper` e `jq`, reporta
+**todas** as ferramentas ausentes de uma vez (não só a primeira) com uma
+sugestão de instalação para cada uma, e só deixa o alvo pedido prosseguir
+se todas estiverem presentes. `00-preflight.sh` (chamado só por `make up`)
+reaproveita o mesmo `check-tools.sh` e, depois, confere também a ausência
+de colisão de nomes de cluster/rede/porta antes de criar qualquer coisa.
 
 ## 9. Cenários de falha simulados
 
